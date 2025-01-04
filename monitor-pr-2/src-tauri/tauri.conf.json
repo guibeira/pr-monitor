@@ -1,0 +1,50 @@
+{
+  "$schema": "https://schema.tauri.app/config/2.0.0-rc",
+  "productName": "Tauri App",
+  "version": "0.1.0",
+  "identifier": "com.tauri.dev",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 200,
+        "title": "Pr-monitor",
+        "width": 420,
+        "alwaysOnTop": true,
+        "closable": false,
+        "decorations": false, 
+        "dragDropEnabled": false,
+        "focus": false,
+        "hiddenTitle": true,
+        "label": "main",
+        "maximizable": false,
+        "minimizable": false,
+        "resizable": false,
+        "shadow": false,
+        "visible": false,
+        "transparent": true
+      }
+    ],
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}
