@@ -37,9 +37,8 @@ function App() {
         const res = await invoke("has_token");
         console.log("has token", res);
         setHasToken(res);
-        //setPrList(await invoke("get_pr_list"));
       } catch (error) {
-        console.error("Deu erro:", error);
+        console.error("Error getting token:", error);
       }
     }
 
@@ -102,6 +101,13 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    startTask();
+    return () => {
+      stopTask();
+    }
+  }, []);
+
   async function stopTask() {
     console.log("Stopping monitor pull requests")
     try {
@@ -138,13 +144,13 @@ function App() {
         <h1>Enter your github token</h1>
         <form className="mt-2" onSubmit={handleSubmitForm}>
           <input
-            className="w-80 h-12 rounded-lg bg-purple-200 placeholder:text-center focus:outline-none"
+            className="w-80 h-12 rounded-lg bg-gray-200 placeholder:text-center focus:outline-none"
             id="token-input" placeholder="Enter token" />
 
-          <button className="ml-2 border-2 border-purple-600 rounded-full w-12 h-12 bg-purple-600 text-white" type="submit">➕</button>
+          <button className="ml-2 border-2 border-gray-600 rounded-full w-12 h-12 bg-gray-600 text-white" type="submit">➕</button>
         </form>
         <p className="mt-2">
-          click <a className="text-purple-500" href="https://github.com/settings/tokens/new" target="_blank" >here</a> to generate your token{" "}
+          click <a className="text-gray-500" href="https://github.com/settings/tokens/new" target="_blank" >here</a> to generate your token{" "}
         </p>
       </main >
     )
@@ -152,8 +158,8 @@ function App() {
 
 
 
-  const activeTabStyle = "text-purple-600 hover:text-purple-600 dark:text-purple-500 dark:hover:text-purple-500 border-purple-600 dark:border-purple-500"
-  const inactiveTabStyle = "dark:border-transparent text-purple-500 hover:text-purple-600 dark:text-purple-400 border-purple-100 hover:border-purple-300 dark:border-purple-700 dark:hover:text-purple-300"
+  const activeTabStyle = "text-gray-600 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-500 border-gray-600 dark:border-gray-500"
+  const inactiveTabStyle = "dark:border-transparent text-gray-500 hover:text-gray-600 dark:text-gray-400 border-gray-100 hover:border-gray-300 dark:border-gray-700 dark:hover:text-gray-300"
 
   const prListOpen = prList.filter(pr => pr.state === "open");
   const prListClosed = prList.filter(pr => pr.state === "closed");
@@ -165,7 +171,7 @@ function App() {
           <p className="font-bold">Error: {errorMessage}</p>
         </div>
       }
-      <div className="border-b border-purple-200 dark:border-purple-700">
+      <div className="border-b border-gray-200 dark:border-gray-700">
         <ul
           className="flex flex-wrap -mb-px text-sm font-medium text-center align-middle"
           id="default-styled-tab"
@@ -208,7 +214,7 @@ function App() {
                 placeholder="  Enter pr link"
               />
               <button
-                className="border-2 border-purple-600 rounded-full w-10 h-10 bg-purple-600 text-white"
+                className="border-2 border-gray-600 rounded-full w-10 h-10 bg-gray-600 text-white"
                 type="submit">➕</button>
             </form>
           </li>
@@ -218,13 +224,13 @@ function App() {
         style={{ display: activeTab === "active" ? "block" : "none" }}
       >
         {prListOpen.length != 0 &&
-          <div className="relative overflow-x-auto bg-purple-100">
+          <div className="relative overflow-x-auto bg-gray-100">
             <ul className="max-w-md space-y-1 text-gray-500 list-none list-inside overflow-x-hidden dark:text-gray-400">
               {prListOpen.map((pullRequest) => (
 
-                <li key={pullRequest.pr_number} className={`text-nowrap m-2 text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}>
+                <li key={pullRequest.pr_number} className={`text-nowrap m-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}>
                   <a href={buildUrlFromPr(pullRequest)} target="_blank"
-                    className="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300">
+                    className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300">
                     {pullRequest.title}
                   </a>
                 </li>
@@ -232,26 +238,27 @@ function App() {
             </ul>
           </div>
         }
-        {prListOpen.length == 0 && <p className="text-center mt-2 text-purple-600">No open pull requests</p>}
+        {prListOpen.length == 0 && <p className="text-center mt-2 text-gray-600">No open pull requests</p>}
       </div>
       <div style={{ display: activeTab === "not-active" ? "block" : "none" }}>
         {prListClosed.length != 0 &&
-          <div className="relative overflow-x-auto bg-purple-100">
+          <div className="relative overflow-x-auto bg-gray-100">
             <ul className="max-w-md space-y-1 text-gray-500 list-none list-inside overflow-x-hidden dark:text-gray-400">
               {prListClosed.map((pullRequest) => (
-                <li key={pullRequest.pr_number} className={`text-nowrap m-2 text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}>
+                <li key={pullRequest.pr_number} className={`text-nowrap m-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}>
 
                   <a href={buildUrlFromPr(pullRequest)} target="_blank"
-                    className="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300">
+                    className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300">
                     {pullRequest.title}</a>
                 </li>
               ))}
             </ul>
           </div>
         }
-        {prListClosed.length == 0 && <p className="text-center mt-2 text-purple-600">No closed pull requests</p>}
+        {prListClosed.length == 0 && <p className="text-center mt-2 text-gray-600">No closed pull requests</p>}
       </div>
       { /* 
+        debug buttons
       <button onClick={startTask}>start_task</button>
       <button onClick={stopTask}>stop_task</button> 
       <button onClick={emitEvent}>emit event</button>

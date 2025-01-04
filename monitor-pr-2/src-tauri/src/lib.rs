@@ -74,14 +74,23 @@ async fn get_pr_details(
     Err("Can't load pr details".to_string())
 }
 
-async fn needs_update_pr(owner: String, repo: String, pr_number: u64, token: String) -> bool {
+enum PrStatus {
+    Merged,
+    Behind,
+    UpToDate,
+    Conflicts,
+    Blocked,
+    Unknown,
+}
+
+async fn needs_update_pr(owner: String, repo: String, pr_number: u64, token: String) -> PrStatus {
     if let Ok(octocrab) = Octocrab::builder().personal_token(token).build() {
         let pull_request = octocrab.pulls(owner, repo).get(pr_number).await;
         if let Ok(pr) = pull_request {
-            log::info!("{:#?}", pr);
+            //log::info!("{:#?}", pr);
             if pr.merged_at.is_some() {
                 log::info!("PR was merged, we not need to update the branch");
-                return false;
+                return PrStatus::Merged;
             }
 
             if let Some(mergeable_state) = pr.mergeable_state {
@@ -89,48 +98,50 @@ async fn needs_update_pr(owner: String, repo: String, pr_number: u64, token: Str
                 match mergeable_state {
                     MergeableState::Behind => {
                         log::info!("PR is behind, we need to update the branch");
-                        return true;
+                        return PrStatus::Behind;
                     }
-                    _ => {
-                        log::info!(
-                            "PR is up to date because it have {}",
-                            match mergeable_state {
-                                MergeableState::Clean => "no conflicts",
-                                MergeableState::Dirty => "conflicts",
-                                MergeableState::Unknown => "unknown state",
-                                MergeableState::Unstable => "unstable",
-                                MergeableState::Blocked => "blocked",
-                                MergeableState::Behind => "behind",
-                                _ => "unknown state",
-                            }
-                        );
-                        return false;
-                    }
+                    _ => match mergeable_state {
+                        MergeableState::Clean => return PrStatus::UpToDate,
+                        MergeableState::Dirty => return PrStatus::Conflicts,
+                        MergeableState::Unknown => return PrStatus::Unknown,
+                        MergeableState::Blocked => return PrStatus::Blocked,
+                        MergeableState::Unstable => return PrStatus::Unknown,
+                        _ => return PrStatus::Unknown,
+                    },
                 }
             }
         } else {
             log::error!("Error: {:?}", pull_request);
-            return false;
+            return PrStatus::Unknown;
         }
     } else {
         log::error!("Failed to create Octocrab instance");
-        return false;
+        return PrStatus::Unknown;
     };
-    return false;
+    log::error!("Failed to get PR details");
+    PrStatus::Unknown
 }
 
-async fn update_pr_branch(owner: &str, repo: &str, pr_number: u64, token: &str) {
+async fn update_pr_branch(
+    owner: &str,
+    repo: &str,
+    pr_number: u64,
+    token: &str,
+) -> Result<(), String> {
     let owner = owner.to_string();
     let repo = repo.to_string();
     if let Ok(octocrab) = Octocrab::builder().personal_token(token).build() {
         let pull_request = octocrab.pulls(owner, repo).update_branch(pr_number).await;
         if let Ok(issue) = pull_request {
             log::info!("{:#?}", issue);
+            return Ok(());
         } else {
             log::error!("Error: {:?}", pull_request);
+            return Err("Can't update pr branch".to_string());
         }
     } else {
         log::error!("Failed to create Octocrab instance");
+        return Err("Can't update pr branch".to_string());
     };
 }
 
@@ -296,7 +307,7 @@ impl AppState {
             return;
         }
         *running = true;
-        drop(running); // Libera o lock
+        drop(running); // free the lock
         info!("Starting monitor PRs");
         let db = self.db.clone();
         let running = self.running.clone();
@@ -309,15 +320,12 @@ impl AppState {
         let token = token.unwrap();
 
         tokio::spawn(async move {
-            // Tarefa
-            let interval = std::time::Duration::from_secs(60);
+            let five_minutes = std::time::Duration::from_secs(300);
             loop {
                 info!("Running task!");
                 let running = running.lock().await;
                 let get_all_pull_request = {
                     let db = db.lock().expect("Failed to lock db");
-                    //let mut stmt = db.prepare("SELECT owner,repo, pr_number FROM pull_request where state = 'open'").unwrap();
-
                     let mut stmt = db
                         .prepare(
                             "SELECT owner, repo, pr_number, title, state, closed_at, url FROM pull_request where state = 'open'",
@@ -352,26 +360,91 @@ impl AppState {
                     results
                 };
                 for pr in get_all_pull_request {
-                    if needs_update_pr(
+                    let pr_status = needs_update_pr(
                         pr.owner.clone(),
                         pr.repo.clone(),
                         pr.pr_number.clone(),
                         token.clone(),
                     )
-                    .await
-                    {
-                        update_pr_branch(&pr.owner, &pr.repo, pr.pr_number, &token).await;
-                        app_handle.emit("pr-updated", pr.pr_number.clone()).unwrap();
-                    } else {
-                        app_handle.emit("pr-error", pr.pr_number.clone()).unwrap();
+                    .await;
+
+                    if *running == false {
+                        info!("Task stopped!");
+                        break;
                     }
+
+                    match pr_status {
+                        PrStatus::Merged => {
+                            info!("PR was merged, we not need to update the branch");
+                            // update the PR status
+                            let db = db.lock().unwrap();
+                            db.execute(
+                                "UPDATE pull_request SET state = 'closed' WHERE pr_number = ?",
+                                params![pr.pr_number],
+                            )
+                            .unwrap();
+                        }
+                        PrStatus::UpToDate => {
+                            info!("PR is up to date");
+                        }
+                        PrStatus::Behind => {
+                            info!("PR is behind, we need to update the branch");
+                            if let Err(e) =
+                                update_pr_branch(&pr.owner, &pr.repo, pr.pr_number, &token).await
+                            {
+                                error!("Failed to update PR branch: {}", e);
+                                app_handle
+                                    .notification()
+                                    .builder()
+                                    .title("Failed to update PR")
+                                    .body(&e)
+                                    .show()
+                                    .expect("Failed to show notification");
+                                return;
+                            }
+                        }
+                        PrStatus::Conflicts => {
+                            info!("PR has conflicts, we need to update the branch");
+                            let title = format!("PR Not Updated: {}", pr.pr_number);
+                            app_handle
+                                .notification()
+                                .builder()
+                                .title(title)
+                                .body("PR has conflicts, please check the PR")
+                                .show()
+                                .expect("Failed to show notification");
+                        }
+                        PrStatus::Blocked => {
+                            info!("PR is blocked, we need to update the branch");
+                            let title = format!("PR Not Updated: {}", pr.pr_number);
+                            app_handle
+                                .notification()
+                                .builder()
+                                .title(title)
+                                .body("PR is blocked, please check the PR")
+                                .show()
+                                .expect("Failed to show notification");
+                        }
+                        PrStatus::Unknown => {
+                            info!("PR status is unknown, we need to update the branch");
+                            let title = format!("PR Not Updated: {}", pr.pr_number);
+                            app_handle
+                                .notification()
+                                .builder()
+                                .title(title)
+                                .body("PR status is unknown, please check the PR")
+                                .show()
+                                .expect("Failed to show notification");
+                        }
+                    }
+                    app_handle.emit("pr-updated", pr.pr_number.clone()).unwrap();
                 }
                 if *running == false {
                     info!("Task stopped!");
                     break;
                 }
                 drop(running);
-                tokio::time::sleep(interval).await;
+                tokio::time::sleep(five_minutes).await;
             }
         });
         info!("Finished starting monitor PRs");
