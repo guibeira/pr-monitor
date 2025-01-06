@@ -383,6 +383,7 @@ impl AppState {
                                 params![pr.pr_number],
                             )
                             .unwrap();
+                            app_handle.emit("pr-closed", pr.pr_number.clone()).unwrap();
                         }
                         PrStatus::UpToDate => {
                             info!("PR is up to date");
@@ -437,7 +438,6 @@ impl AppState {
                                 .expect("Failed to show notification");
                         }
                     }
-                    app_handle.emit("pr-updated", pr.pr_number.clone()).unwrap();
                 }
                 if *running == false {
                     info!("Task stopped!");

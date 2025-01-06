@@ -71,25 +71,24 @@ function App() {
     };
   }, []);
 
-  // useEffect(() => {
-  //   const unlisten = listen("pr-checking", (event) => {
-  //     console.log("Pr-checking: ",event.payload); // "Hello from backend!"
-  //   });
+  useEffect(() => {
+    const unlisten = listen("pr-closed", (event) => {
+      console.log("Pr-closed: ",event.payload); // "Hello from backend!"
+      // parse to int payload
+      const prNumber = parseInt(event.payload);
+      setPrList(prList => prList.map(pr => {
+        if (pr.pr_number === prNumber) {
+          pr.state = "closed";
+        }
+        return pr;
+      }));
+    });
 
-  //   return () => {
-  //     unlisten.then((fn) => fn());
-  //   };
-  // }, []);
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
-  // useEffect(() => {
-  //   const unlisten = listen("pr-error", (event) => {
-  //     console.log("Pr-error: ",event.payload); // "Hello from backend!"
-  //   });
-
-  //   return () => {
-  //     unlisten.then((fn) => fn());
-  //   };
-  // }, []);
 
   async function startTask() {
     console.log("Starting monitor pull requests")
