@@ -528,6 +528,11 @@ impl AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(false) = event {
+                let _ = window.hide();
+            }
+        })
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_positioner::init())
         .setup(|app| {
@@ -566,6 +571,7 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
             Ok(())
         })
         .manage(AppState::new())
