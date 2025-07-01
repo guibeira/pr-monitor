@@ -256,6 +256,11 @@ async fn set_refresh_time(
     Ok(())
 }
 
+#[tauri::command]
+async fn delete_pr(state: State<'_, AppState>, pr_number: u64) -> Result<(), String> {
+    state.delete_pr(pr_number)
+}
+
 fn parse_github_pr_url(url: &str) -> Option<(String, String, String)> {
     let re = Regex::new(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)").unwrap();
     if let Some(caps) = re.captures(url) {
@@ -542,6 +547,17 @@ impl AppState {
         .unwrap();
         Ok(())
     }
+
+    fn delete_pr(&self, pr_number: u64) -> Result<(), String> {
+        let db = self.db.lock().unwrap();
+        db.execute(
+            "DELETE FROM pull_request WHERE pr_number = ?",
+            params![pr_number],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn get_all_prs(&self) -> Vec<PullRequestModel> {
         let db = self.db.lock().unwrap();
         let mut stmt = db
@@ -647,7 +663,8 @@ pub fn run() {
             add_token,
             get_all_prs,
             get_refresh_time,
-            set_refresh_time
+            set_refresh_time,
+            delete_pr
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

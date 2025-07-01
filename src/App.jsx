@@ -22,6 +22,15 @@ function App() {
       setPrUrl("");
     }
   }
+
+  async function deletePr(prNumber) {
+    try {
+      await invoke("delete_pr", { prNumber: prNumber });
+      setPrList((prList) => prList.filter((pr) => pr.pr_number !== prNumber));
+    } catch (error) {
+      updateErrorMessage(error);
+    }
+  }
   const updateErrorMessage = (message) => {
     setErrorMessage(message);
     setTimeout(() => {
@@ -285,15 +294,25 @@ function App() {
                 <>
                   <li
                     key={pullRequest.pr_number}
-                    className={`text-nowrap text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-24 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
+                    className="flex justify-between items-center"
                   >
-                    <a
-                      href={buildUrlFromPr(pullRequest)}
-                      target="_blank"
-                      className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-2"
+                    <div
+                      className={`text-nowrap overflow-hidden w-34 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
                     >
-                      {pullRequest.title}
-                    </a>
+                      <a
+                        href={buildUrlFromPr(pullRequest)}
+                        target="_blank"
+                        className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                      >
+                        {pullRequest.title}
+                      </a>
+                    </div>
+                    <button
+                      onClick={() => deletePr(pullRequest.pr_number)}
+                      className="text-red-500 hover:text-red-700 font-bold p-1"
+                    >
+                      &times;
+                    </button>
                   </li>
                   <hr />
                 </>
@@ -314,15 +333,25 @@ function App() {
               {prListClosed.map((pullRequest) => (
                 <li
                   key={pullRequest.pr_number}
-                  className={`text-nowrap m-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
+                  className="flex justify-between items-center m-2"
                 >
-                  <a
-                    href={buildUrlFromPr(pullRequest)}
-                    target="_blank"
-                    className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                  <div
+                    className={`text-nowrap overflow-hidden w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
                   >
-                    {pullRequest.title}
-                  </a>
+                    <a
+                      href={buildUrlFromPr(pullRequest)}
+                      target="_blank"
+                      className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                    >
+                      {pullRequest.title}
+                    </a>
+                  </div>
+                  <button
+                    onClick={() => deletePr(pullRequest.pr_number)}
+                    className="text-red-500 hover:text-red-700 font-bold p-1"
+                  >
+                    &times;
+                  </button>
                 </li>
               ))}
             </ul>
