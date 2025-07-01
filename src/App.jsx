@@ -268,7 +268,7 @@ function App() {
             value={prUrl}
             className="rounded bg-gray-100 focus:outline-none w-full mr-2"
             onChange={(e) => setPrUrl(e.currentTarget.value)}
-            placeholder="  Enter pr link"
+            placeholder="  Pull request link"
           />
           <button
             className="border-2 border-gray-600 rounded-full w-10 h-10 bg-gray-600 text-white"
@@ -278,22 +278,25 @@ function App() {
           </button>
         </form>
         {prListOpen.length != 0 && (
-          <div className="relative overflow-x-auto bg-gray-100">
+          <div className="relative overflow-x-auto bg-gray-100 m-2">
             {" "}
-            <ul className="max-w-md space-y-1 text-gray-500 list-none list-inside overflow-x-hidden dark:text-gray-400">
+            <ul className="max-w-md space-y-1 p-2 text-gray-500 list-none list-inside overflow-x-hidden dark:text-gray-400">
               {prListOpen.map((pullRequest) => (
-                <li
-                  key={pullRequest.pr_number}
-                  className={`text-nowrap m-2 text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
-                >
-                  <a
-                    href={buildUrlFromPr(pullRequest)}
-                    target="_blank"
-                    className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                <>
+                  <li
+                    key={pullRequest.pr_number}
+                    className={`text-nowrap text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-24 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
                   >
-                    {pullRequest.title}
-                  </a>
-                </li>
+                    <a
+                      href={buildUrlFromPr(pullRequest)}
+                      target="_blank"
+                      className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300 w-2"
+                    >
+                      {pullRequest.title}
+                    </a>
+                  </li>
+                  <hr />
+                </>
               ))}
             </ul>
           </div>
