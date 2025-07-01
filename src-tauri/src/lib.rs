@@ -237,6 +237,25 @@ async fn get_all_prs(state: State<'_, AppState>) -> Result<Vec<PullRequestModel>
     Ok(state.get_all_prs())
 }
 
+#[tauri::command]
+async fn get_refresh_time(state: State<'_, AppState>) -> Result<u64, String> {
+    Ok(state.get_refresh_time())
+}
+
+#[tauri::command]
+async fn set_refresh_time(
+    app_handle: tauri::AppHandle<Wry>,
+    state: State<'_, AppState>,
+    time_in_minutes: u64,
+) -> Result<(), String> {
+    let time_in_seconds = time_in_minutes * 60;
+    state.set_refresh_time(time_in_seconds);
+    // Restart the task
+    state.stop_monitor().await;
+    state.start_monitor(app_handle).await;
+    Ok(())
+}
+
 fn parse_github_pr_url(url: &str) -> Option<(String, String, String)> {
     let re = Regex::new(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)").unwrap();
     if let Some(caps) = re.captures(url) {
@@ -273,6 +292,14 @@ impl AppState {
         )
         .unwrap();
         conn.execute(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );",
+            params![],
+        )
+        .unwrap();
+        conn.execute(
             "CREATE TABLE IF NOT EXISTS token (
                 id INTEGER PRIMARY KEY,
                 key TEXT NOT NULL
@@ -285,6 +312,28 @@ impl AppState {
             db: Arc::new(Mutex::new(conn)),
             running: Arc::new(TokioMutex::new(false)),
         }
+    }
+
+    fn get_refresh_time(&self) -> u64 {
+        let db = self.db.lock().unwrap();
+        let mut stmt = db
+            .prepare("SELECT value FROM settings WHERE key = 'refresh_time'")
+            .unwrap();
+        let time_iter = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|r| r.unwrap());
+        let time: Option<String> = time_iter.collect::<Vec<String>>().pop();
+        time.and_then(|t| t.parse::<u64>().ok()).unwrap_or(300)
+    }
+
+    fn set_refresh_time(&self, time_in_seconds: u64) {
+        let db = self.db.lock().unwrap();
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('refresh_time', ?)",
+            params![time_in_seconds.to_string()],
+        )
+        .unwrap();
     }
 
     fn get_token(&self) -> Option<String> {
@@ -318,11 +367,15 @@ impl AppState {
             return;
         }
         let token = token.unwrap();
+        let refresh_time_secs = self.get_refresh_time();
 
         tokio::spawn(async move {
-            let five_minutes = std::time::Duration::from_secs(300);
+            let refresh_duration = std::time::Duration::from_secs(refresh_time_secs);
             loop {
-                info!("Running task!");
+                info!(
+                    "Running task with refresh time: {} seconds",
+                    refresh_time_secs
+                );
                 let running = running.lock().await;
                 let get_all_pull_request = {
                     let db = db.lock().expect("Failed to lock db");
@@ -444,7 +497,7 @@ impl AppState {
                     break;
                 }
                 drop(running);
-                tokio::time::sleep(five_minutes).await;
+                tokio::time::sleep(refresh_duration).await;
             }
         });
         info!("Finished starting monitor PRs");
@@ -585,7 +638,9 @@ pub fn run() {
             get_pr_list,
             has_token,
             add_token,
-            get_all_prs
+            get_all_prs,
+            get_refresh_time,
+            set_refresh_time
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

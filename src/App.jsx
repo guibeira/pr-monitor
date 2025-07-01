@@ -10,6 +10,7 @@ function App() {
   const [activeTab, setActiveTab] = useState("active");
   const [hasToken, setHasToken] = useState(false);
   const [prUrl, setPrUrl] = useState("");
+  const [refreshTime, setRefreshTime] = useState(5);
 
   async function addPr() {
     try {
@@ -28,6 +29,14 @@ function App() {
     }, 5000);
   };
   useEffect(() => {
+    async function getRefreshTime() {
+      try {
+        const res = await invoke("get_refresh_time");
+        setRefreshTime(res / 60);
+      } catch (error) {
+        console.error("Error getting refresh time:", error);
+      }
+    }
     async function hasToken() {
       try {
         const res = await invoke("has_token");
@@ -49,6 +58,7 @@ function App() {
     }
     hasToken();
     getPrList();
+    getRefreshTime();
   }, []);
 
   useEffect(() => {
@@ -227,33 +237,46 @@ function App() {
               Closed
             </button>
           </li>
-
           <li className="me-2" role="presentation">
-            <form
-              className="flex justify-between gap-1 mt-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                addPr();
-              }}
+            <button
+              onClick={() => setActiveTab("settings")}
+              className={
+                activeTab === "settings"
+                  ? "inline-block p-4 border-b-2 rounded-t-lg " + activeTabStyle
+                  : "inline-block p-4 border-b-2 rounded-t-lg " +
+                  inactiveTabStyle
+              }
+              id="settings-styled-tab"
+              type="button"
+              role="tab"
             >
-              <input
-                id="greet-input"
-                value={prUrl}
-                className="rounded bg-gray-100 focus:outline-none"
-                onChange={(e) => setPrUrl(e.currentTarget.value)}
-                placeholder="  Enter pr link"
-              />
-              <button
-                className="border-2 border-gray-600 rounded-full w-10 h-10 bg-gray-600 text-white"
-                type="submit"
-              >
-                ➕
-              </button>
-            </form>
+              Settings
+            </button>
           </li>
         </ul>
       </div>
       <div style={{ display: activeTab === "active" ? "block" : "none" }}>
+        <form
+          className="flex justify-between m-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            addPr();
+          }}
+        >
+          <input
+            id="greet-input"
+            value={prUrl}
+            className="rounded bg-gray-100 focus:outline-none w-full mr-2"
+            onChange={(e) => setPrUrl(e.currentTarget.value)}
+            placeholder="  Enter pr link"
+          />
+          <button
+            className="border-2 border-gray-600 rounded-full w-10 h-10 bg-gray-600 text-white"
+            type="submit"
+          >
+            ➕
+          </button>
+        </form>
         {prListOpen.length != 0 && (
           <div className="relative overflow-x-auto bg-gray-100">
             {" "}
@@ -307,6 +330,35 @@ function App() {
             No closed pull requests
           </p>
         )}
+      </div>
+      <div style={{ display: activeTab === "settings" ? "block" : "none" }}>
+        <form
+          className="flex items-center justify-start gap-4 mt-2 p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            invoke("set_refresh_time", {
+              timeInMinutes: Number(refreshTime),
+            });
+          }}
+        >
+          <label htmlFor="refresh-time-input" className="text-gray-600">
+            Refresh time (minutes):
+          </label>
+          <input
+            id="refresh-time-input"
+            type="number"
+            min="1"
+            value={refreshTime}
+            className="rounded bg-gray-100 focus:outline-none w-20 text-center"
+            onChange={(e) => setRefreshTime(e.currentTarget.value)}
+          />
+          <button
+            className="border-2 border-gray-600 rounded-lg px-4 py-1 bg-gray-600 text-white"
+            type="submit"
+          >
+            Save
+          </button>
+        </form>
       </div>
       {/* 
         debug buttons
