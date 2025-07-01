@@ -274,8 +274,8 @@ struct AppState {
 }
 
 impl AppState {
-    fn new() -> Self {
-        let conn = Connection::open("monitor.db").unwrap();
+    fn new(db_path: std::path::PathBuf) -> Self {
+        let conn = Connection::open(db_path).unwrap();
         // create db tables
         conn.execute(
             "CREATE TABLE IF NOT EXISTS pull_request (
@@ -589,6 +589,14 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_positioner::init())
         .setup(|app| {
+            let app_handle = app.handle().clone();
+            let app_data_dir = app_handle.path().app_data_dir().unwrap();
+            if !app_data_dir.exists() {
+                std::fs::create_dir_all(&app_data_dir).unwrap();
+            }
+            let db_path = app_data_dir.join("monitor.db");
+            app.manage(AppState::new(db_path));
+
             let quit = MenuItemBuilder::new("Quit").id("quit").build(app).unwrap();
             let menu = MenuBuilder::new(app).items(&[&quit]).build().unwrap();
             let _ = TrayIconBuilder::new()
@@ -627,7 +635,6 @@ pub fn run() {
 
             Ok(())
         })
-        .manage(AppState::new())
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
