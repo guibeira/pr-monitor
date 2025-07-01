@@ -261,6 +261,17 @@ async fn delete_pr(state: State<'_, AppState>, pr_number: u64) -> Result<(), Str
     state.delete_pr(pr_number)
 }
 
+#[tauri::command]
+async fn get_show_notification(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.get_show_notification())
+}
+
+#[tauri::command]
+async fn set_show_notification(state: State<'_, AppState>, show: bool) -> Result<(), String> {
+    state.set_show_notification(show);
+    Ok(())
+}
+
 fn parse_github_pr_url(url: &str) -> Option<(String, String, String)> {
     let re = Regex::new(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)").unwrap();
     if let Some(caps) = re.captures(url) {
@@ -341,6 +352,28 @@ impl AppState {
         .unwrap();
     }
 
+    fn get_show_notification(&self) -> bool {
+        let db = self.db.lock().unwrap();
+        let mut stmt = db
+            .prepare("SELECT value FROM settings WHERE key = 'show_notification'")
+            .unwrap();
+        let show_iter = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|r| r.unwrap());
+        let show: Option<String> = show_iter.collect::<Vec<String>>().pop();
+        show.and_then(|s| s.parse::<bool>().ok()).unwrap_or(true)
+    }
+
+    fn set_show_notification(&self, show: bool) {
+        let db = self.db.lock().unwrap();
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('show_notification', ?)",
+            params![show.to_string()],
+        )
+        .unwrap();
+    }
+
     fn get_token(&self) -> Option<String> {
         let db = self.db.lock().unwrap();
         let mut stmt = db.prepare("SELECT key FROM token").unwrap();
@@ -373,6 +406,7 @@ impl AppState {
         }
         let token = token.unwrap();
         let refresh_time_secs = self.get_refresh_time();
+        let show_notification = self.get_show_notification();
 
         tokio::spawn(async move {
             let refresh_duration = std::time::Duration::from_secs(refresh_time_secs);
@@ -452,48 +486,56 @@ impl AppState {
                                 update_pr_branch(&pr.owner, &pr.repo, pr.pr_number, &token).await
                             {
                                 error!("Failed to update PR branch: {}", e);
-                                app_handle
-                                    .notification()
-                                    .builder()
-                                    .title("Failed to update PR")
-                                    .body(&e)
-                                    .show()
-                                    .expect("Failed to show notification");
+                                if show_notification {
+                                    app_handle
+                                        .notification()
+                                        .builder()
+                                        .title("Failed to update PR")
+                                        .body(&e)
+                                        .show()
+                                        .expect("Failed to show notification");
+                                }
                                 return;
                             }
                         }
                         PrStatus::Conflicts => {
                             info!("PR has conflicts, we need to update the branch");
-                            let title = format!("PR Not Updated: {}", pr.pr_number);
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title(title)
-                                .body("PR has conflicts, please check the PR")
-                                .show()
-                                .expect("Failed to show notification");
+                            if show_notification {
+                                let title = format!("PR Not Updated: {}", pr.pr_number);
+                                app_handle
+                                    .notification()
+                                    .builder()
+                                    .title(title)
+                                    .body("PR has conflicts, please check the PR")
+                                    .show()
+                                    .expect("Failed to show notification");
+                            }
                         }
                         PrStatus::Blocked => {
                             info!("PR is blocked, we need to update the branch");
-                            let title = format!("PR Not Updated: {}", pr.pr_number);
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title(title)
-                                .body("PR is blocked, please check the PR")
-                                .show()
-                                .expect("Failed to show notification");
+                            if show_notification {
+                                let title = format!("PR Not Updated: {}", pr.pr_number);
+                                app_handle
+                                    .notification()
+                                    .builder()
+                                    .title(title)
+                                    .body("PR is blocked, please check the PR")
+                                    .show()
+                                    .expect("Failed to show notification");
+                            }
                         }
                         PrStatus::Unknown => {
                             info!("PR status is unknown, we need to update the branch");
-                            let title = format!("PR Not Updated: {}", pr.pr_number);
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title(title)
-                                .body("PR status is unknown, please check the PR")
-                                .show()
-                                .expect("Failed to show notification");
+                            if show_notification {
+                                let title = format!("PR Not Updated: {}", pr.pr_number);
+                                app_handle
+                                    .notification()
+                                    .builder()
+                                    .title(title)
+                                    .body("PR status is unknown, please check the PR")
+                                    .show()
+                                    .expect("Failed to show notification");
+                            }
                         }
                     }
                 }
@@ -664,7 +706,9 @@ pub fn run() {
             get_all_prs,
             get_refresh_time,
             set_refresh_time,
-            delete_pr
+            delete_pr,
+            get_show_notification,
+            set_show_notification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

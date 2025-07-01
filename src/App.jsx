@@ -11,6 +11,7 @@ function App() {
   const [hasToken, setHasToken] = useState(false);
   const [prUrl, setPrUrl] = useState("");
   const [refreshTime, setRefreshTime] = useState(5);
+  const [showNotification, setShowNotification] = useState(true);
 
   async function addPr() {
     try {
@@ -38,6 +39,14 @@ function App() {
     }, 5000);
   };
   useEffect(() => {
+    async function getShowNotification() {
+      try {
+        const res = await invoke("get_show_notification");
+        setShowNotification(res);
+      } catch (error) {
+        console.error("Error getting show notification:", error);
+      }
+    }
     async function getRefreshTime() {
       try {
         const res = await invoke("get_refresh_time");
@@ -68,6 +77,7 @@ function App() {
     hasToken();
     getPrList();
     getRefreshTime();
+    getShowNotification();
   }, []);
 
   useEffect(() => {
@@ -364,33 +374,52 @@ function App() {
         )}
       </div>
       <div style={{ display: activeTab === "settings" ? "block" : "none" }}>
-        <form
-          className="flex items-center justify-start gap-4 mt-2 p-4"
-          onSubmit={(e) => {
-            e.preventDefault();
-            invoke("set_refresh_time", {
-              timeInMinutes: Number(refreshTime),
-            });
-          }}
-        >
-          <label htmlFor="refresh-time-input" className="text-gray-600">
-            Refresh time (minutes):
-          </label>
-          <input
-            id="refresh-time-input"
-            type="number"
-            min="1"
-            value={refreshTime}
-            className="rounded bg-gray-100 focus:outline-none w-20 text-center"
-            onChange={(e) => setRefreshTime(e.currentTarget.value)}
-          />
-          <button
-            className="border-2 border-gray-600 rounded-lg px-4 py-1 bg-gray-600 text-white"
-            type="submit"
+        <div className="p-4 flex-col items-center justify-start gap-8">
+          <form
+            className="flex items-center justify-start gap-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              invoke("set_refresh_time", {
+                timeInMinutes: Number(refreshTime),
+              });
+            }}
           >
-            Save
-          </button>
-        </form>
+            <label htmlFor="refresh-time-input" className="text-gray-600">
+              Refresh time (minutes):
+            </label>
+            <input
+              id="refresh-time-input"
+              type="number"
+              min="1"
+              value={refreshTime}
+              className="rounded bg-gray-100 focus:outline-none w-20 text-center"
+              onChange={(e) => setRefreshTime(e.currentTarget.value)}
+            />
+            <button
+              className="border-2 border-gray-600 rounded-lg px-4 py-1 bg-gray-600 text-white"
+              type="submit"
+            >
+              Save
+            </button>
+          </form>
+          <div className="flex items-center justify-start gap-2">
+            <label htmlFor="show-notification-input" className="text-gray-600">
+              Show notifications:
+            </label>
+            <input
+              id="show-notification-input"
+              type="checkbox"
+              checked={showNotification}
+              className="rounded bg-gray-100 focus:outline-none"
+              onChange={(e) => {
+                setShowNotification(e.currentTarget.checked);
+                invoke("set_show_notification", {
+                  show: e.currentTarget.checked,
+                });
+              }}
+            />
+          </div>
+        </div>
       </div>
       {/* 
         debug buttons
