@@ -237,6 +237,41 @@ async fn get_all_prs(state: State<'_, AppState>) -> Result<Vec<PullRequestModel>
     Ok(state.get_all_prs())
 }
 
+#[tauri::command]
+async fn get_refresh_time(state: State<'_, AppState>) -> Result<u64, String> {
+    Ok(state.get_refresh_time())
+}
+
+#[tauri::command]
+async fn set_refresh_time(
+    app_handle: tauri::AppHandle<Wry>,
+    state: State<'_, AppState>,
+    time_in_minutes: u64,
+) -> Result<(), String> {
+    let time_in_seconds = time_in_minutes * 60;
+    state.set_refresh_time(time_in_seconds);
+    // Restart the task
+    state.stop_monitor().await;
+    state.start_monitor(app_handle).await;
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_pr(state: State<'_, AppState>, pr_number: u64) -> Result<(), String> {
+    state.delete_pr(pr_number)
+}
+
+#[tauri::command]
+async fn get_show_notification(state: State<'_, AppState>) -> Result<bool, String> {
+    Ok(state.get_show_notification())
+}
+
+#[tauri::command]
+async fn set_show_notification(state: State<'_, AppState>, show: bool) -> Result<(), String> {
+    state.set_show_notification(show);
+    Ok(())
+}
+
 fn parse_github_pr_url(url: &str) -> Option<(String, String, String)> {
     let re = Regex::new(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)").unwrap();
     if let Some(caps) = re.captures(url) {
@@ -255,8 +290,8 @@ struct AppState {
 }
 
 impl AppState {
-    fn new() -> Self {
-        let conn = Connection::open("monitor.db").unwrap();
+    fn new(db_path: std::path::PathBuf) -> Self {
+        let conn = Connection::open(db_path).unwrap();
         // create db tables
         conn.execute(
             "CREATE TABLE IF NOT EXISTS pull_request (
@@ -268,6 +303,14 @@ impl AppState {
                 state TEXT NOT NULL,
                 url TEXT NOT NULL,
                 closed_at TEXT
+            );",
+            params![],
+        )
+        .unwrap();
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
             );",
             params![],
         )
@@ -285,6 +328,50 @@ impl AppState {
             db: Arc::new(Mutex::new(conn)),
             running: Arc::new(TokioMutex::new(false)),
         }
+    }
+
+    fn get_refresh_time(&self) -> u64 {
+        let db = self.db.lock().unwrap();
+        let mut stmt = db
+            .prepare("SELECT value FROM settings WHERE key = 'refresh_time'")
+            .unwrap();
+        let time_iter = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|r| r.unwrap());
+        let time: Option<String> = time_iter.collect::<Vec<String>>().pop();
+        time.and_then(|t| t.parse::<u64>().ok()).unwrap_or(300)
+    }
+
+    fn set_refresh_time(&self, time_in_seconds: u64) {
+        let db = self.db.lock().unwrap();
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('refresh_time', ?)",
+            params![time_in_seconds.to_string()],
+        )
+        .unwrap();
+    }
+
+    fn get_show_notification(&self) -> bool {
+        let db = self.db.lock().unwrap();
+        let mut stmt = db
+            .prepare("SELECT value FROM settings WHERE key = 'show_notification'")
+            .unwrap();
+        let show_iter = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|r| r.unwrap());
+        let show: Option<String> = show_iter.collect::<Vec<String>>().pop();
+        show.and_then(|s| s.parse::<bool>().ok()).unwrap_or(true)
+    }
+
+    fn set_show_notification(&self, show: bool) {
+        let db = self.db.lock().unwrap();
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('show_notification', ?)",
+            params![show.to_string()],
+        )
+        .unwrap();
     }
 
     fn get_token(&self) -> Option<String> {
@@ -318,11 +405,16 @@ impl AppState {
             return;
         }
         let token = token.unwrap();
+        let refresh_time_secs = self.get_refresh_time();
+        let show_notification = self.get_show_notification();
 
         tokio::spawn(async move {
-            let five_minutes = std::time::Duration::from_secs(300);
+            let refresh_duration = std::time::Duration::from_secs(refresh_time_secs);
             loop {
-                info!("Running task!");
+                info!(
+                    "Running task with refresh time: {} seconds",
+                    refresh_time_secs
+                );
                 let running = running.lock().await;
                 let get_all_pull_request = {
                     let db = db.lock().expect("Failed to lock db");
@@ -394,48 +486,56 @@ impl AppState {
                                 update_pr_branch(&pr.owner, &pr.repo, pr.pr_number, &token).await
                             {
                                 error!("Failed to update PR branch: {}", e);
-                                app_handle
-                                    .notification()
-                                    .builder()
-                                    .title("Failed to update PR")
-                                    .body(&e)
-                                    .show()
-                                    .expect("Failed to show notification");
+                                if show_notification {
+                                    app_handle
+                                        .notification()
+                                        .builder()
+                                        .title("Failed to update PR")
+                                        .body(&e)
+                                        .show()
+                                        .expect("Failed to show notification");
+                                }
                                 return;
                             }
                         }
                         PrStatus::Conflicts => {
                             info!("PR has conflicts, we need to update the branch");
-                            let title = format!("PR Not Updated: {}", pr.pr_number);
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title(title)
-                                .body("PR has conflicts, please check the PR")
-                                .show()
-                                .expect("Failed to show notification");
+                            if show_notification {
+                                let title = format!("PR Not Updated: {}", pr.pr_number);
+                                app_handle
+                                    .notification()
+                                    .builder()
+                                    .title(title)
+                                    .body("PR has conflicts, please check the PR")
+                                    .show()
+                                    .expect("Failed to show notification");
+                            }
                         }
                         PrStatus::Blocked => {
                             info!("PR is blocked, we need to update the branch");
-                            let title = format!("PR Not Updated: {}", pr.pr_number);
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title(title)
-                                .body("PR is blocked, please check the PR")
-                                .show()
-                                .expect("Failed to show notification");
+                            if show_notification {
+                                let title = format!("PR Not Updated: {}", pr.pr_number);
+                                app_handle
+                                    .notification()
+                                    .builder()
+                                    .title(title)
+                                    .body("PR is blocked, please check the PR")
+                                    .show()
+                                    .expect("Failed to show notification");
+                            }
                         }
                         PrStatus::Unknown => {
                             info!("PR status is unknown, we need to update the branch");
-                            let title = format!("PR Not Updated: {}", pr.pr_number);
-                            app_handle
-                                .notification()
-                                .builder()
-                                .title(title)
-                                .body("PR status is unknown, please check the PR")
-                                .show()
-                                .expect("Failed to show notification");
+                            if show_notification {
+                                let title = format!("PR Not Updated: {}", pr.pr_number);
+                                app_handle
+                                    .notification()
+                                    .builder()
+                                    .title(title)
+                                    .body("PR status is unknown, please check the PR")
+                                    .show()
+                                    .expect("Failed to show notification");
+                            }
                         }
                     }
                 }
@@ -444,7 +544,7 @@ impl AppState {
                     break;
                 }
                 drop(running);
-                tokio::time::sleep(five_minutes).await;
+                tokio::time::sleep(refresh_duration).await;
             }
         });
         info!("Finished starting monitor PRs");
@@ -489,6 +589,17 @@ impl AppState {
         .unwrap();
         Ok(())
     }
+
+    fn delete_pr(&self, pr_number: u64) -> Result<(), String> {
+        let db = self.db.lock().unwrap();
+        db.execute(
+            "DELETE FROM pull_request WHERE pr_number = ?",
+            params![pr_number],
+        )
+        .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+
     fn get_all_prs(&self) -> Vec<PullRequestModel> {
         let db = self.db.lock().unwrap();
         let mut stmt = db
@@ -528,9 +639,22 @@ impl AppState {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(false) = event {
+                let _ = window.hide();
+            }
+        })
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_positioner::init())
         .setup(|app| {
+            let app_handle = app.handle().clone();
+            let app_data_dir = app_handle.path().app_data_dir().unwrap();
+            if !app_data_dir.exists() {
+                std::fs::create_dir_all(&app_data_dir).unwrap();
+            }
+            let db_path = app_data_dir.join("monitor.db");
+            app.manage(AppState::new(db_path));
+
             let quit = MenuItemBuilder::new("Quit").id("quit").build(app).unwrap();
             let menu = MenuBuilder::new(app).items(&[&quit]).build().unwrap();
             let _ = TrayIconBuilder::new()
@@ -566,9 +690,9 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
             Ok(())
         })
-        .manage(AppState::new())
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -579,7 +703,12 @@ pub fn run() {
             get_pr_list,
             has_token,
             add_token,
-            get_all_prs
+            get_all_prs,
+            get_refresh_time,
+            set_refresh_time,
+            delete_pr,
+            get_show_notification,
+            set_show_notification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
