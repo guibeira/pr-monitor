@@ -12,6 +12,47 @@ function App() {
   const [prUrl, setPrUrl] = useState("");
   const [refreshTime, setRefreshTime] = useState(5);
   const [showNotification, setShowNotification] = useState(true);
+  const [theme, setTheme] = useState("system"); // "light", "dark", "system"
+
+  // Apply theme on component mount and when theme state changes
+  useEffect(() => {
+    const applyTheme = async () => {
+      const savedTheme = await invoke("get_theme").catch(() => "system");
+      setTheme(savedTheme);
+
+      if (savedTheme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else if (savedTheme === "light") {
+        document.documentElement.classList.remove("dark");
+      } else {
+        // System theme
+        if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      }
+    };
+    applyTheme();
+
+    const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => {
+      if (theme === "system") {
+        if (mediaQuery.matches) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      }
+    };
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [theme]);
+
+  async function handleThemeChange(newTheme) {
+    setTheme(newTheme);
+    await invoke("set_theme", { theme: newTheme });
+  }
 
   async function addPr() {
     try {
@@ -58,7 +99,6 @@ function App() {
     async function hasToken() {
       try {
         const res = await invoke("has_token");
-        console.log("has token", res);
         setHasToken(res);
       } catch (error) {
         console.error("Error getting token:", error);
@@ -68,7 +108,6 @@ function App() {
     async function getPrList() {
       try {
         const res = await invoke("get_pr_list");
-        console.log("get_pr_list", res);
         setPrList(res);
       } catch (error) {
         console.error("Deu erro:", error);
@@ -82,7 +121,6 @@ function App() {
 
   useEffect(() => {
     const unlisten = listen("error-event", (event) => {
-      console.log("Emit Event: ", event.payload); // "Hello from backend!"
       setErrorMessage(event.payload);
       setTimeout(() => {
         setErrorMessage("");
@@ -96,8 +134,6 @@ function App() {
 
   useEffect(() => {
     const unlisten = listen("pr-closed", (event) => {
-      console.log("Pr-closed: ", event.payload); // "Hello from backend!"
-      // parse to int payload
       const prNumber = parseInt(event.payload);
       setPrList((prList) =>
         prList.map((pr) => {
@@ -115,10 +151,8 @@ function App() {
   }, []);
 
   async function startTask() {
-    console.log("Starting monitor pull requests");
     try {
-      const response = await invoke("start_task");
-      console.log(response);
+      await invoke("start_task");
     } catch (error) {
       console.error(error);
     }
@@ -132,20 +166,8 @@ function App() {
   }, []);
 
   async function stopTask() {
-    console.log("Stopping monitor pull requests");
     try {
-      const response = await invoke("stop_task");
-      console.log(response);
-    } catch (error) {
-      console.error(error);
-    }
-  }
-
-  async function emitEvent() {
-    console.log("Emitting event");
-    try {
-      const response = await invoke("emit_event");
-      console.log(response);
+      await invoke("stop_task");
     } catch (error) {
       console.error(error);
     }
@@ -153,7 +175,6 @@ function App() {
 
   const handleSubmitForm = (e) => {
     e.preventDefault();
-    console.log("submit form");
     const token = document.getElementById("token-input").value;
     invoke("add_token", { token });
     setHasToken(true);
@@ -164,17 +185,16 @@ function App() {
 
   if (!hasToken) {
     return (
-      <main className="m-4 text-center bg-gray-200">
+      <main className="m-4 text-center bg-gray-200 dark:bg-gray-800 dark:text-white">
         <h1>Enter your github token</h1>
         <form className="mt-2" onSubmit={handleSubmitForm}>
           <input
-            className="w-80 h-12 rounded-lg bg-gray-200 placeholder:text-center focus:outline-none"
+            className="w-80 h-12 rounded-lg bg-gray-200 dark:bg-gray-700 dark:text-white placeholder:text-center focus:outline-none"
             id="token-input"
             placeholder="Enter token"
           />
-
           <button
-            className="ml-2 border-2 border-gray-600 rounded-full w-12 h-12 bg-gray-600 text-white"
+            className="ml-2 border-2 border-gray-600 dark:border-blue-500 rounded-full w-12 h-12 bg-gray-600 dark:bg-blue-500 text-white"
             type="submit"
           >
             ➕
@@ -183,7 +203,7 @@ function App() {
         <p className="mt-2">
           click{" "}
           <a
-            className="text-gray-500"
+            className="text-gray-500 dark:text-blue-400"
             href="https://github.com/settings/tokens/new"
             target="_blank"
           >
@@ -196,7 +216,7 @@ function App() {
   }
 
   const activeTabStyle =
-    "text-gray-600 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-500 border-gray-600 dark:border-gray-500";
+    "text-gray-600 hover:text-gray-600 dark:text-gray-300 dark:hover:text-gray-300 border-gray-600 dark:border-gray-300";
   const inactiveTabStyle =
     "dark:border-transparent text-gray-500 hover:text-gray-600 dark:text-gray-400 border-gray-100 hover:border-gray-300 dark:border-gray-700 dark:hover:text-gray-300";
 
@@ -204,10 +224,10 @@ function App() {
   const prListClosed = prList.filter((pr) => pr.state === "closed");
 
   return (
-    <main className="container bg-gray-200">
+    <main className="container bg-white dark:bg-gray-900 text-black dark:text-white min-h-screen">
       {errorMessage && (
         <div
-          className="bg-red-100 border border-red-400 w-screen h-14 text-red-700 px-4 py-3 absolute"
+          className="bg-red-100 border border-red-400 w-screen h-14 text-red-700 px-4 py-3 absolute dark:bg-red-900 dark:text-red-300 dark:border-red-600"
           role="alert"
         >
           <p className="font-bold">Error: {errorMessage}</p>
@@ -227,12 +247,6 @@ function App() {
                   : "inline-block p-4 border-b-2 rounded-t-lg " +
                   inactiveTabStyle
               }
-              id="profile-styled-tab"
-              data-tabs-target="#styled-profile"
-              type="button"
-              role="tab"
-              aria-controls="profile"
-              aria-selected="false"
             >
               Open
             </button>
@@ -246,12 +260,6 @@ function App() {
                   : "inline-block p-4 border-b-2 rounded-t-lg " +
                   inactiveTabStyle
               }
-              id="dashboard-styled-tab"
-              data-tabs-target="#styled-dashboard"
-              type="button"
-              role="tab"
-              aria-controls="dashboard"
-              aria-selected="false"
             >
               Closed
             </button>
@@ -265,9 +273,6 @@ function App() {
                   : "inline-block p-4 border-b-2 rounded-t-lg " +
                   inactiveTabStyle
               }
-              id="settings-styled-tab"
-              type="button"
-              role="tab"
             >
               Settings
             </button>
@@ -285,60 +290,61 @@ function App() {
           <input
             id="greet-input"
             value={prUrl}
-            className="rounded bg-gray-100 focus:outline-none w-full mr-2"
+            className="rounded bg-gray-100 dark:bg-gray-700 dark:text-white focus:outline-none w-full mr-2"
             onChange={(e) => setPrUrl(e.currentTarget.value)}
             placeholder="  Pull request link"
           />
           <button
-            className="border-2 border-gray-600 rounded-full w-10 h-10 bg-gray-600 text-white"
+            className="border-2 border-gray-600 dark:border-blue-500 rounded-full w-10 h-10 bg-gray-600 dark:bg-blue-500 text-white"
             type="submit"
           >
             ➕
           </button>
         </form>
-        {prListOpen.length != 0 && (
-          <div className="relative overflow-x-auto bg-gray-100 m-2">
-            {" "}
+        {prListOpen.length > 0 && (
+          <div className="relative overflow-x-auto bg-gray-100 dark:bg-gray-800 m-2">
             <ul className="max-w-md space-y-1 p-2 text-gray-500 list-none list-inside overflow-x-hidden dark:text-gray-400">
               {prListOpen.map((pullRequest) => (
-                <>
-                  <li
-                    key={pullRequest.pr_number}
-                    className="flex justify-between items-center"
+                <li
+                  key={pullRequest.pr_number}
+                  className="flex justify-between items-center"
+                >
+                  <div
+                    className={`text-nowrap overflow-hidden w-34 ${
+                      pullRequest.title.length > 50
+                        ? "hover:animate-carousel"
+                        : ""
+                    }`}
                   >
-                    <div
-                      className={`text-nowrap overflow-hidden w-34 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
+                    <a
+                      href={buildUrlFromPr(pullRequest)}
+                      target="_blank"
+                      className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
                     >
-                      <a
-                        href={buildUrlFromPr(pullRequest)}
-                        target="_blank"
-                        className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
-                      >
-                        {pullRequest.title}
-                      </a>
-                    </div>
-                    <button
-                      onClick={() => deletePr(pullRequest.pr_number)}
-                      className="text-red-500 hover:text-red-700 font-bold p-1"
-                    >
-                      &times;
-                    </button>
-                  </li>
-                  <hr />
-                </>
+                      {pullRequest.title}
+                    </a>
+                  </div>
+                  <button
+                    onClick={() => deletePr(pullRequest.pr_number)}
+                    className="text-red-500 hover:text-red-700 font-bold p-1"
+                  >
+                    &times;
+                  </button>
+                  <hr className="dark:border-gray-600" />
+                </li>
               ))}
             </ul>
           </div>
         )}
-        {prListOpen.length == 0 && (
-          <p className="text-center mt-2 text-gray-600">
+        {prListOpen.length === 0 && (
+          <p className="text-center mt-2 text-gray-600 dark:text-gray-400">
             No open pull requests
           </p>
         )}
       </div>
       <div style={{ display: activeTab === "not-active" ? "block" : "none" }}>
-        {prListClosed.length != 0 && (
-          <div className="relative overflow-x-auto bg-gray-100">
+        {prListClosed.length > 0 && (
+          <div className="relative overflow-x-auto bg-gray-100 dark:bg-gray-800">
             <ul className="max-w-md space-y-1 text-gray-500 list-none list-inside overflow-x-hidden dark:text-gray-400">
               {prListClosed.map((pullRequest) => (
                 <li
@@ -346,12 +352,16 @@ function App() {
                   className="flex justify-between items-center m-2"
                 >
                   <div
-                    className={`text-nowrap overflow-hidden w-32 ${pullRequest.title.length > 50 ? "hover:animate-carousel" : ""}`}
+                    className={`text-nowrap overflow-hidden w-32 ${
+                      pullRequest.title.length > 50
+                        ? "hover:animate-carousel"
+                        : ""
+                    }`}
                   >
                     <a
                       href={buildUrlFromPr(pullRequest)}
                       target="_blank"
-                      className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                      className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-gray-100"
                     >
                       {pullRequest.title}
                     </a>
@@ -367,14 +377,39 @@ function App() {
             </ul>
           </div>
         )}
-        {prListClosed.length == 0 && (
-          <p className="text-center mt-2 text-gray-600">
+        {prListClosed.length === 0 && (
+          <p className="text-center mt-2 text-gray-600 dark:text-gray-400">
             No closed pull requests
           </p>
         )}
       </div>
       <div style={{ display: activeTab === "settings" ? "block" : "none" }}>
-        <div className="p-4 flex-col items-center justify-start gap-8">
+        <div className="p-4 flex flex-col items-start gap-4">
+          <div className="flex items-center justify-start gap-4">
+            <label className="text-gray-600 dark:text-gray-300">
+              Theme:
+            </label>
+            <div className="relative">
+              <select
+                value={theme}
+                onChange={(e) => handleThemeChange(e.target.value)}
+                className="appearance-none rounded bg-gray-100 dark:bg-gray-700 dark:text-white focus:outline-none py-2 px-8"
+              >
+                <option value="system">System</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700 dark:text-gray-300">
+                <svg
+                  className="fill-current h-4 w-4"
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 20 20"
+                >
+                  <path d="M5.516 7.548c.436-.446 1.043-.481 1.576 0L10 10.405l2.908-2.857c.533-.481 1.14-.446 1.576 0 .436.445.408 1.197 0 1.642l-3.417 3.357c-.27.267-.626.402-.98.402s-.71-.135-.98-.402L5.516 9.19c-.408-.445-.436-1.197 0-1.642z" />
+                </svg>
+              </div>
+            </div>
+          </div>
           <form
             className="flex items-center justify-start gap-4"
             onSubmit={(e) => {
@@ -384,7 +419,10 @@ function App() {
               });
             }}
           >
-            <label htmlFor="refresh-time-input" className="text-gray-600">
+            <label
+              htmlFor="refresh-time-input"
+              className="text-gray-600 dark:text-gray-300"
+            >
               Refresh time (minutes):
             </label>
             <input
@@ -392,41 +430,48 @@ function App() {
               type="number"
               min="1"
               value={refreshTime}
-              className="rounded bg-gray-100 focus:outline-none w-20 text-center"
+              className="rounded bg-gray-100 dark:bg-gray-700 dark:text-white focus:outline-none w-20 text-center"
               onChange={(e) => setRefreshTime(e.currentTarget.value)}
             />
             <button
-              className="border-2 border-gray-600 rounded-lg px-4 py-1 bg-gray-600 text-white"
+              className="border-2 border-gray-600 dark:border-blue-500 rounded-lg px-4 py-1 bg-gray-600 dark:bg-blue-500 text-white"
               type="submit"
             >
               Save
             </button>
           </form>
           <div className="flex items-center justify-start gap-2">
-            <label htmlFor="show-notification-input" className="text-gray-600">
+            <label
+              htmlFor="show-notification-input"
+              className="text-gray-600 dark:text-gray-300"
+            >
               Show notifications:
             </label>
-            <input
+            <button
               id="show-notification-input"
-              type="checkbox"
-              checked={showNotification}
-              className="rounded bg-gray-100 focus:outline-none"
-              onChange={(e) => {
-                setShowNotification(e.currentTarget.checked);
+              role="switch"
+              aria-checked={showNotification}
+              onClick={() => {
+                const newShowNotification = !showNotification;
+                setShowNotification(newShowNotification);
                 invoke("set_show_notification", {
-                  show: e.currentTarget.checked,
+                  show: newShowNotification,
                 });
               }}
-            />
+              className={`${
+                showNotification ? "bg-blue-500" : "bg-gray-200 dark:bg-gray-700"
+              } relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none`}
+            >
+              <span
+                aria-hidden="true"
+                className={`${
+                  showNotification ? "translate-x-5" : "translate-x-0"
+                } pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`}
+              />
+            </button>
           </div>
         </div>
       </div>
-      {/* 
-        debug buttons
-      <button onClick={startTask}>start_task</button>
-      <button onClick={stopTask}>stop_task</button> 
-      <button onClick={emitEvent}>emit event</button>
-      */}
     </main>
   );
 }

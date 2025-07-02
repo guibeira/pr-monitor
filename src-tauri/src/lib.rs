@@ -272,6 +272,17 @@ async fn set_show_notification(state: State<'_, AppState>, show: bool) -> Result
     Ok(())
 }
 
+#[tauri::command]
+async fn get_theme(state: State<'_, AppState>) -> Result<String, String> {
+    Ok(state.get_theme())
+}
+
+#[tauri::command]
+async fn set_theme(state: State<'_, AppState>, theme: String) -> Result<(), String> {
+    state.set_theme(theme);
+    Ok(())
+}
+
 fn parse_github_pr_url(url: &str) -> Option<(String, String, String)> {
     let re = Regex::new(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)").unwrap();
     if let Some(caps) = re.captures(url) {
@@ -328,6 +339,28 @@ impl AppState {
             db: Arc::new(Mutex::new(conn)),
             running: Arc::new(TokioMutex::new(false)),
         }
+    }
+
+    fn get_theme(&self) -> String {
+        let db = self.db.lock().unwrap();
+        let mut stmt = db
+            .prepare("SELECT value FROM settings WHERE key = 'theme'")
+            .unwrap();
+        let theme_iter = stmt
+            .query_map([], |row| row.get(0))
+            .unwrap()
+            .map(|r| r.unwrap());
+        let theme: Option<String> = theme_iter.collect::<Vec<String>>().pop();
+        theme.unwrap_or("system".to_string())
+    }
+
+    fn set_theme(&self, theme: String) {
+        let db = self.db.lock().unwrap();
+        db.execute(
+            "INSERT OR REPLACE INTO settings (key, value) VALUES ('theme', ?)",
+            params![theme],
+        )
+        .unwrap();
     }
 
     fn get_refresh_time(&self) -> u64 {
@@ -708,7 +741,9 @@ pub fn run() {
             set_refresh_time,
             delete_pr,
             get_show_notification,
-            set_show_notification
+            set_show_notification,
+            get_theme,
+            set_theme
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
