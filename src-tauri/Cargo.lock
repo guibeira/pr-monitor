@@ -2384,27 +2384,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "monitor-pr-2"
-version = "0.1.0"
-dependencies = [
- "env_logger",
- "log",
- "octocrab",
- "regex",
- "rusqlite",
- "serde",
- "serde_json",
- "sysinfo",
- "tauri",
- "tauri-build",
- "tauri-plugin-log",
- "tauri-plugin-notification",
- "tauri-plugin-positioner",
- "tauri-plugin-shell",
- "tokio",
-]
-
-[[package]]
 name = "muda"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3284,6 +3263,27 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "pull-request-monitor"
+version = "0.1.0"
+dependencies = [
+ "env_logger",
+ "log",
+ "octocrab",
+ "regex",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-log",
+ "tauri-plugin-notification",
+ "tauri-plugin-positioner",
+ "tauri-plugin-shell",
+ "tokio",
 ]
 
 [[package]]
