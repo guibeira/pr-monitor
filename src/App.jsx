@@ -185,7 +185,7 @@ function App() {
 
   if (!hasToken) {
     return (
-      <main className="m-4 text-center bg-gray-200 dark:bg-gray-800 dark:text-white">
+      <main className="m-4 text-center bg-gray-200 dark:bg-gray-800 dark:text-white rounded-lg">
         <h1>Enter your github token</h1>
         <form className="mt-2" onSubmit={handleSubmitForm}>
           <input
@@ -224,7 +224,7 @@ function App() {
   const prListClosed = prList.filter((pr) => pr.state === "closed");
 
   return (
-    <main className="container bg-white dark:bg-gray-900 text-black dark:text-white min-h-screen">
+    <main className="container bg-white dark:bg-gray-900 text-black dark:text-white min-h-screen rounded-lg">
       {errorMessage && (
         <div
           className="bg-red-100 border border-red-400 w-screen h-14 text-red-700 px-4 py-3 absolute dark:bg-red-900 dark:text-red-300 dark:border-red-600"
@@ -233,7 +233,10 @@ function App() {
           <p className="font-bold">Error: {errorMessage}</p>
         </div>
       )}
-      <div className="border-b border-gray-200 dark:border-gray-700">
+      <div
+        data-tauri-drag-region
+        className="border-b border-gray-200 dark:border-gray-700"
+      >
         <ul
           className="flex flex-wrap -mb-px text-sm font-medium text-center align-middle"
           id="default-styled-tab"

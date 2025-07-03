@@ -1,0 +1,36 @@
+{
+  "name": "light_theme",
+  "author": "Goose",
+  "version": "1.0.0",
+  "comment": "A light theme with a white background and dark text.",
+  "colors": {
+    "background": "#FFFFFF",
+    "foreground": "#333333",
+    "selectionBackground": "#007AFF",
+    "selectionForeground": "#FFFFFF",
+    "cursorColor": "#333333",
+    "lineHighlight": "#F0F0F0"
+  },
+  "styles": {
+    "normal": {
+      "foreground": "#333333"
+    },
+    "comment": {
+      "foreground": "#999999",
+      "fontStyle": "italic"
+    },
+    "keyword": {
+      "foreground": "#007AFF",
+      "fontStyle": "bold"
+    },
+    "string": {
+      "foreground": "#33A333"
+    },
+    "number": {
+      "foreground": "#FF3B30"
+    },
+    "operator": {
+      "foreground": "#FF9500"
+    }
+  }
+}
