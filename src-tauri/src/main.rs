@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    monitor_pr_2_lib::run()
+    pull_request_monitor_lib::run()
 }

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2.0.0-rc",
-  "productName": "Pr-monitor",
+  "productName": "Pull request monitor",
   "version": "0.1.0",
   "identifier": "pr-monitor.guibeira.dev",
   "build": {

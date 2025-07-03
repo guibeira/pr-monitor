@@ -1,7 +1,7 @@
 [package]
-name = "monitor-pr-2"
+name = "pull-request-monitor"
 version = "0.1.0"
-description = "A Tauri App"
+description = "A Tauri application to monitor pull requests on GitHub and notify the user when they are ready for review."
 authors = ["you"]
 edition = "2021"
 
@@ -11,7 +11,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "monitor_pr_2_lib"
+name = "pull_request_monitor_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
