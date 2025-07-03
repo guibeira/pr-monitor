@@ -224,7 +224,7 @@ function App() {
   const prListClosed = prList.filter((pr) => pr.state === "closed");
 
   return (
-    <main className="container bg-white dark:bg-gray-900 text-black dark:text-white min-h-screen rounded-lg">
+    <main className="bg-white dark:bg-gray-900 text-black dark:text-white min-h-screen rounded-lg overflow-hidden">
       {errorMessage && (
         <div
           className="bg-red-100 border border-red-400 w-screen h-14 text-red-700 px-4 py-3 absolute dark:bg-red-900 dark:text-red-300 dark:border-red-600"

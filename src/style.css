@@ -2,8 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  @apply bg-white dark:bg-gray-900;
+html,
+body,
+#root {
+  background: transparent;
 }
 
 /* Custom scrollbar for WebKit browsers (Chrome, Safari) */
