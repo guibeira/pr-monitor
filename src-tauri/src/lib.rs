@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Manager, State, Wry, window::Color};
+use tauri::{window::Color, Emitter, Manager, State, Wry};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_positioner::WindowExt;
 use tokio::sync::Mutex as TokioMutex;
@@ -325,7 +325,7 @@ impl AppState {
             running: Arc::new(TokioMutex::new(false)),
         }
     }
-    
+
     fn get_theme(&self) -> String {
         let db = self.db.lock().unwrap();
         let mut stmt = db
@@ -424,7 +424,6 @@ impl AppState {
         let running = self.running.clone();
         let token = token.unwrap();
         let refresh_time_secs = self.get_refresh_time();
-        let show_notification = self.get_show_notification();
 
         tokio::spawn(async move {
             let refresh_duration = std::time::Duration::from_secs(refresh_time_secs);
@@ -438,7 +437,20 @@ impl AppState {
                     info!("Task stopped!");
                     break;
                 }
-                
+
+                let show_notification = {
+                    let db = db.lock().unwrap();
+                    let mut stmt = db
+                        .prepare("SELECT value FROM settings WHERE key = 'show_notification'")
+                        .unwrap();
+                    let show_iter = stmt
+                        .query_map([], |row| row.get(0))
+                        .unwrap()
+                        .map(|r| r.unwrap());
+                    let show: Option<String> = show_iter.collect::<Vec<String>>().pop();
+                    show.and_then(|s| s.parse::<bool>().ok()).unwrap_or(true)
+                };
+
                 let get_all_pull_request = {
                     let db = db.lock().expect("Failed to lock db");
                     let mut stmt = db
@@ -472,7 +484,7 @@ impl AppState {
                 };
 
                 for pr in get_all_pull_request {
-                     if !*running_guard {
+                    if !*running_guard {
                         info!("Task stopped during processing!");
                         break;
                     }
@@ -514,7 +526,7 @@ impl AppState {
                             }
                         }
                         PrStatus::Conflicts | PrStatus::Blocked | PrStatus::Unknown => {
-                             if show_notification {
+                            if show_notification {
                                 let status_str = match pr_status {
                                     PrStatus::Conflicts => "has conflicts",
                                     PrStatus::Blocked => "is blocked",
@@ -532,7 +544,7 @@ impl AppState {
                             }
                         }
                         PrStatus::UpToDate => {
-                             info!("PR is up to date");
+                            info!("PR is up to date");
                         }
                     }
                 }
