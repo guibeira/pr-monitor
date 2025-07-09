@@ -404,24 +404,24 @@ impl AppState {
     }
 
     async fn start_monitor(&self, app_handle: tauri::AppHandle<Wry>) {
-        let is_running = self.running.clone();
+        let token = self.get_token();
+        if token.is_none() {
+            info!("Token not found");
+            return;
+        }
 
+        let is_running = self.running.clone();
         let mut running = is_running.lock().await;
         if *running {
             info!("Task is already running!");
             return;
         }
         *running = true;
-        drop(running); 
+        drop(running);
+
         info!("Starting monitor PRs");
         let db = self.db.clone();
         let running = self.running.clone();
-
-        let token = self.get_token();
-        if token.is_none() {
-            info!("Token not found");
-            return;
-        }
         let token = token.unwrap();
         let refresh_time_secs = self.get_refresh_time();
         let show_notification = self.get_show_notification();
@@ -472,7 +472,7 @@ impl AppState {
                 };
 
                 for pr in get_all_pull_request {
-                     if !*running.lock().await {
+                     if !*running_guard {
                         info!("Task stopped during processing!");
                         break;
                     }
