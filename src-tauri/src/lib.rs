@@ -4,7 +4,7 @@ use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{Emitter, Manager, State, Wry, window::Color};
+use tauri::{window::Color, Emitter, Manager, State, Wry};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_positioner::WindowExt;
 use tokio::sync::Mutex as TokioMutex;
@@ -36,7 +36,7 @@ async fn get_pr_details(
         let pull_request = octocrab.pulls(owner, repo).get(pr_number).await;
         if let Ok(pr) = pull_request {
             log::info!("{:#?}", pr);
-            if let Some(_) = pr.mergeable_state {
+            if pr.mergeable_state.is_some() {
                 let closed_at = pr.closed_at;
                 let mut closed_str = "".to_string();
                 if closed_at.is_some() {
@@ -54,7 +54,7 @@ async fn get_pr_details(
                 return Ok(PullRequestModel {
                     owner: owner.clone(),
                     repo: repo.clone(),
-                    pr_number: pr_number.clone(),
+                    pr_number,
                     title: pr.title.unwrap_or("".to_string()),
                     state: state.to_string(),
                     closed_at: closed_str,
@@ -128,15 +128,15 @@ async fn update_pr_branch(
         let pull_request = octocrab.pulls(owner, repo).update_branch(pr_number).await;
         if let Ok(issue) = pull_request {
             log::info!("{:#?}", issue);
-            return Ok(());
+            Ok(())
         } else {
             log::error!("Error: {:?}", pull_request);
-            return Err("Can't update pr branch".to_string());
+            Err("Can't update pr branch".to_string())
         }
     } else {
         log::error!("Failed to create Octocrab instance");
-        return Err("Can't update pr branch".to_string());
-    };
+        Err("Can't update pr branch".to_string())
+    }
 }
 
 #[tauri::command]
@@ -325,7 +325,7 @@ impl AppState {
             running: Arc::new(TokioMutex::new(false)),
         }
     }
-    
+
     fn get_theme(&self) -> String {
         let db = self.db.lock().unwrap();
         let mut stmt = db
@@ -404,27 +404,26 @@ impl AppState {
     }
 
     async fn start_monitor(&self, app_handle: tauri::AppHandle<Wry>) {
-        let is_running = self.running.clone();
+        let token = self.get_token();
+        if token.is_none() {
+            info!("Token not found");
+            return;
+        }
 
+        let is_running = self.running.clone();
         let mut running = is_running.lock().await;
         if *running {
             info!("Task is already running!");
             return;
         }
         *running = true;
-        drop(running); 
+        drop(running);
+
         info!("Starting monitor PRs");
         let db = self.db.clone();
         let running = self.running.clone();
-
-        let token = self.get_token();
-        if token.is_none() {
-            info!("Token not found");
-            return;
-        }
         let token = token.unwrap();
         let refresh_time_secs = self.get_refresh_time();
-        let show_notification = self.get_show_notification();
 
         tokio::spawn(async move {
             let refresh_duration = std::time::Duration::from_secs(refresh_time_secs);
@@ -438,7 +437,20 @@ impl AppState {
                     info!("Task stopped!");
                     break;
                 }
-                
+
+                let show_notification = {
+                    let db = db.lock().unwrap();
+                    let mut stmt = db
+                        .prepare("SELECT value FROM settings WHERE key = 'show_notification'")
+                        .unwrap();
+                    let show_iter = stmt
+                        .query_map([], |row| row.get(0))
+                        .unwrap()
+                        .map(|r| r.unwrap());
+                    let show: Option<String> = show_iter.collect::<Vec<String>>().pop();
+                    show.and_then(|s| s.parse::<bool>().ok()).unwrap_or(true)
+                };
+
                 let get_all_pull_request = {
                     let db = db.lock().expect("Failed to lock db");
                     let mut stmt = db
@@ -472,7 +484,7 @@ impl AppState {
                 };
 
                 for pr in get_all_pull_request {
-                     if !*running.lock().await {
+                    if !*running_guard {
                         info!("Task stopped during processing!");
                         break;
                     }
@@ -514,7 +526,7 @@ impl AppState {
                             }
                         }
                         PrStatus::Conflicts | PrStatus::Blocked | PrStatus::Unknown => {
-                             if show_notification {
+                            if show_notification {
                                 let status_str = match pr_status {
                                     PrStatus::Conflicts => "has conflicts",
                                     PrStatus::Blocked => "is blocked",
@@ -532,7 +544,7 @@ impl AppState {
                             }
                         }
                         PrStatus::UpToDate => {
-                             info!("PR is up to date");
+                            info!("PR is up to date");
                         }
                     }
                 }
@@ -642,10 +654,7 @@ pub fn run() {
                 .icon(app.default_window_icon().unwrap().clone())
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id().as_ref() {
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
+                .on_menu_event(|app, event| if event.id().as_ref() == "quit" { app.exit(0) })
                 .on_tray_icon_event(|tray, event| {
                     let app = tray.app_handle();
                     tauri_plugin_positioner::on_tray_event(app.app_handle(), &event);
