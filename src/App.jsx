@@ -7,7 +7,7 @@ import "./style.css";
 function App() {
   const [prList, setPrList] = useState([]);
   const [errorMessage, setErrorMessage] = useState("");
-  const [activeTab, setActiveTab] = useState("active");
+  const [activeTab, setActiveTab] = useState("open");
   const [hasToken, setHasToken] = useState(false);
   const [prUrl, setPrUrl] = useState("");
   const [refreshTime, setRefreshTime] = useState(5);
