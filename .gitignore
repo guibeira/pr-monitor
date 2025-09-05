@@ -23,6 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
+/target
+
 src-tauri/monitor.db
 node_modules/
 dist/
