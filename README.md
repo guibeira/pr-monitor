@@ -13,7 +13,16 @@ PR Monitor is a desktop utility for developers that lives in your system tray/me
 We currently only support MacOS, but we plan to add Windows support in the future.
 
 ## How to install
-To install the application, you will need [Rust](https://www.rust-lang.org/tools/install) and [Node.js](https://nodejs.org/) installed.
+### Using Homebrew
+
+```bash
+brew tap guibeira/pr-monitor https://github.com/guibeira/pr-monitor
+brew install --cask pr-monitor
+```
+
+### Building from source
+
+To install the application from source, you will need [Rust](https://www.rust-lang.org/tools/install) and [Node.js](https://nodejs.org/) installed.
 
 Now install the tauri CLI tool, which is required to build and run the application.
 ```bash
@@ -76,4 +85,3 @@ Navigate to the **Settings** tab to configure the application:
 
 - **Refresh Time:** Set how often (in minutes) the app should check your pull requests for updates.
 - **Show Notifications:** Toggle desktop notifications for PR status changes on or off.
-

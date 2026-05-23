@@ -1,0 +1,227 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|alpha|beta|pre)[0-9]*)?$ ]]; then
+            echo "::error::Invalid release tag: ${GITHUB_REF_NAME}"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [[ "$VERSION" =~ (rc|alpha|beta|pre) ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify tag matches project versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          CARGO_VERSION=$(
+            awk '
+              /^\[package\]/ { in_pkg = 1; next }
+              /^\[/          { in_pkg = 0 }
+              in_pkg && /^version[[:space:]]*=/ {
+                match($0, /"[^"]*"/)
+                print substr($0, RSTART + 1, RLENGTH - 2)
+                exit
+              }
+            ' src-tauri/Cargo.toml
+          )
+          PACKAGE_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version")"
+          TAURI_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json', 'utf8')).version")"
+          for version_file in \
+            "package.json:${PACKAGE_VERSION}" \
+            "src-tauri/Cargo.toml:${CARGO_VERSION}" \
+            "src-tauri/tauri.conf.json:${TAURI_VERSION}"
+          do
+            file="${version_file%%:*}"
+            file_version="${version_file#*:}"
+            if [[ "$TAG_VERSION" != "$file_version" ]]; then
+              echo "::error::Tag version '${TAG_VERSION}' does not match ${file}='${file_version}'."
+              exit 1
+            fi
+          done
+
+  build-dmg:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+          - os: macos-15
+            target: aarch64-apple-darwin
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+
+      - name: Setup Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup default stable
+          rustup target add "${{ matrix.target }}"
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      - name: Install frontend dependencies
+        shell: bash
+        run: npm ci
+
+      - name: Build DMG
+        shell: bash
+        run: npm exec -- tauri build --bundles dmg --target "${{ matrix.target }}"
+
+      - name: Normalize DMG name
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.validate.outputs.version }}"
+          TARGET="${{ matrix.target }}"
+          mkdir -p release
+          DMG_PATH="$(find "src-tauri/target/${TARGET}/release/bundle/dmg" -maxdepth 1 -name "*.dmg" -print -quit)"
+          if [[ -z "${DMG_PATH}" ]]; then
+            echo "::error::No DMG found for ${TARGET}."
+            exit 1
+          fi
+          cp "${DMG_PATH}" "release/pr-monitor-${VERSION}-${TARGET}.dmg"
+
+      - name: Upload DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ matrix.target }}
+          path: release/pr-monitor-${{ needs.validate.outputs.version }}-${{ matrix.target }}.dmg
+          retention-days: 1
+
+  github-release:
+    needs:
+      - validate
+      - build-dmg
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download DMGs
+        uses: actions/download-artifact@v8
+        with:
+          path: release
+          merge-multiple: true
+          pattern: release-*
+
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum -- *.dmg > SHA256SUMS
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ needs.validate.outputs.version }}
+          generate_release_notes: true
+          files: |
+            release/*.dmg
+            release/SHA256SUMS
+          draft: false
+          prerelease: ${{ needs.validate.outputs.prerelease }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-homebrew:
+    needs:
+      - validate
+      - github-release
+    if: ${{ needs.validate.outputs.prerelease == 'false' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout source repository
+        uses: actions/checkout@v6
+        with:
+          path: source
+
+      - name: Download release checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p source/release
+          cd source/release
+          gh release download "${GITHUB_REF_NAME}" -p "SHA256SUMS"
+
+      - name: Checkout tap repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: tap
+          token: ${{ secrets.RELEASE_PAT || github.token }}
+
+      - name: Generate Cask
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.validate.outputs.version }}"
+          bash source/scripts/release/generate_homebrew_cask.sh \
+            "${VERSION}" \
+            source/release/SHA256SUMS \
+            tap/Casks/pr-monitor.rb \
+            guibeira \
+            pr-monitor
+
+      - name: Commit and push Cask
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd tap
+          git add Casks/pr-monitor.rb
+          if git diff --cached --quiet -- Casks/pr-monitor.rb; then
+            echo "No Cask changes; skipping commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "release: pr-monitor ${{ needs.validate.outputs.version }}"
+          git push origin "HEAD:${{ github.event.repository.default_branch }}"
