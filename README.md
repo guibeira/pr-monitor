@@ -10,7 +10,7 @@ PR Monitor is a desktop utility for developers that lives in your system tray/me
 - **Status Notifications:** Get notified of PR status changes, such as merge conflicts or blocks.
 - **Configurable:** Adjust the refresh interval and toggle notifications to fit your workflow.
 
-We currently only support MacOS, but we plan to add Windows support in the future.
+PR Monitor currently supports macOS only.
 
 ## How to install
 ### Using Homebrew
