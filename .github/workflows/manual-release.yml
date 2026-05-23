@@ -87,18 +87,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          VERSION="${{ steps.validate.outputs.version }}"
           TAG="${{ steps.validate.outputs.tag }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
           if git diff --cached --quiet; then
-            echo "::error::No changes staged. Version may already be set to ${VERSION}."
-            exit 1
+            echo "No version changes staged; tagging current ${GITHUB_REF_NAME} at ${TAG}."
+          else
+            git commit -m "chore(release): ${TAG}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
-          git commit -m "chore(release): ${TAG}"
           git tag -a "${TAG}" -m "Release ${TAG}"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
           git push origin "${TAG}"
 
       - name: Summary
