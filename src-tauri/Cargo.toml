@@ -1,6 +1,6 @@
 [package]
 name = "pull-request-monitor"
-version = "0.1.1"
+version = "0.1.2"
 description = "A Tauri application to monitor pull requests on GitHub and notify the user when they are ready for review."
 authors = ["you"]
 edition = "2021"
