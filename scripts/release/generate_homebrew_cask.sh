@@ -49,6 +49,12 @@ cask "pr-monitor" do
 
   app "Pull request monitor.app"
 
+  postflight do
+    system_command "/usr/bin/xattr",
+                   args: ["-d", "com.apple.quarantine", "#{appdir}/Pull request monitor.app"],
+                   sudo: false
+  end
+
   zap trash: [
     "~/Library/Application Support/pr-monitor.guibeira.dev",
     "~/Library/Caches/pr-monitor.guibeira.dev",
