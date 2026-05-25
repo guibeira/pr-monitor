@@ -3283,6 +3283,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-positioner",
  "tauri-plugin-shell",
+ "thiserror 2.0.12",
  "tokio",
 ]
 
