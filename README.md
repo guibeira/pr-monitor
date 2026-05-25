@@ -64,8 +64,11 @@ To run the application locally, you will need [Rust](https://www.rust-lang.org/t
 
 On the first run, the application will ask for a GitHub Personal Access Token. This token is required to interact with the GitHub API on your behalf.
 
-- You can generate a new token [here](https://github.com/settings/tokens/new).
-- The token needs the `repo` scope to access and update your pull requests.
+- Generate a **Personal access token (classic)** [here](https://github.com/settings/tokens/new).
+- For private repositories, select the `repo` scope.
+- For public repositories only, select the `public_repo` scope instead.
+- Do not select broader scopes such as `admin:org`, `delete_repo`, `admin:repo_hook`, `packages`, or `gist`.
+- The `workflow` scope is optional and should only be selected if GitHub rejects branch updates because the PR changes workflow files under `.github/workflows/`.
 
 ### 3. Adding a Pull Request
 
