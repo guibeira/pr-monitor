@@ -43,13 +43,7 @@ impl Storage {
             );",
             [],
         )?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS token (
-                id INTEGER PRIMARY KEY,
-                key TEXT NOT NULL
-            );",
-            [],
-        )?;
+        conn.execute("DROP TABLE IF EXISTS token;", [])?;
         conn.execute(
             "DELETE FROM pull_request
              WHERE id NOT IN (
@@ -79,39 +73,6 @@ impl Storage {
             f(&conn)
         })
         .await?
-    }
-
-    pub async fn has_token(&self) -> StorageResult<bool> {
-        self.with_conn(|conn| {
-            let exists: i64 =
-                conn.query_row("SELECT EXISTS(SELECT 1 FROM token LIMIT 1)", [], |row| {
-                    row.get(0)
-                })?;
-            Ok(exists != 0)
-        })
-        .await
-    }
-
-    pub async fn set_token(&self, token: String) -> StorageResult<()> {
-        self.with_conn(move |conn| {
-            conn.execute("DELETE FROM token", [])?;
-            conn.execute("INSERT INTO token (key) VALUES (?)", params![token])?;
-            Ok(())
-        })
-        .await
-    }
-
-    pub async fn get_token(&self) -> StorageResult<Option<String>> {
-        self.with_conn(|conn| {
-            conn.query_row(
-                "SELECT key FROM token ORDER BY id DESC LIMIT 1",
-                [],
-                |row| row.get(0),
-            )
-            .optional()
-            .map_err(StorageError::from)
-        })
-        .await
     }
 
     pub async fn get_theme(&self) -> StorageResult<String> {

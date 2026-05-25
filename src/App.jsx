@@ -65,11 +65,17 @@ function App() {
     }
   }
 
-  async function deletePr(prNumber) {
+  const prKey = (pr) => `${pr.owner}/${pr.repo}#${pr.pr_number}`;
+
+  async function deletePr(pr) {
     try {
-      await invoke("delete_pr", { prNumber });
+      await invoke("delete_pr", {
+        owner: pr.owner,
+        repo: pr.repo,
+        prNumber: pr.pr_number,
+      });
       setPrList((currentList) =>
-        currentList.filter((pr) => pr.pr_number !== prNumber)
+        currentList.filter((item) => prKey(item) !== prKey(pr))
       );
     } catch (error) {
       updateErrorMessage(error);
@@ -98,10 +104,10 @@ function App() {
       updateErrorMessage(event.payload);
     });
     const unlistenPrClosed = listen("pr-closed", (event) => {
-      const prNumber = parseInt(event.payload, 10);
+      const closedPr = event.payload;
       setPrList((currentList) =>
         currentList.map((pr) =>
-          pr.pr_number === prNumber ? { ...pr, state: "closed" } : pr
+          prKey(pr) === prKey(closedPr) ? { ...pr, state: "closed" } : pr
         )
       );
     });
@@ -207,13 +213,13 @@ function App() {
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
             {prListOpen.length > 0 ? (
               prListOpen.map((pr) => (
-                <li key={pr.pr_number} className="flex items-center justify-between p-2">
+                <li key={prKey(pr)} className="flex items-center justify-between p-2">
                   <div className="flex-grow overflow-hidden whitespace-nowrap">
                     <a href={buildUrlFromPr(pr)} target="_blank" rel="noopener noreferrer" className="hover:underline">
                       {pr.title}
                     </a>
                   </div>
-                  <button onClick={() => deletePr(pr.pr_number)} className="text-red-500 hover:text-red-700 font-bold p-1 ml-2 flex-shrink-0">
+                  <button onClick={() => deletePr(pr)} className="text-red-500 hover:text-red-700 font-bold p-1 ml-2 flex-shrink-0">
                     &times;
                   </button>
                 </li>
@@ -232,13 +238,13 @@ function App() {
           <ul className="divide-y divide-gray-200 dark:divide-gray-700">
             {prListClosed.length > 0 ? (
               prListClosed.map((pr) => (
-                <li key={pr.pr_number} className="flex items-center justify-between p-2">
+                <li key={prKey(pr)} className="flex items-center justify-between p-2">
                   <div className="flex-grow overflow-hidden whitespace-nowrap">
                     <a href={buildUrlFromPr(pr)} target="_blank" rel="noopener noreferrer" className="hover:underline">
                       {pr.title}
                     </a>
                   </div>
-                  <button onClick={() => deletePr(pr.pr_number)} className="text-red-500 hover:text-red-700 font-bold p-1 ml-2 flex-shrink-0">
+                  <button onClick={() => deletePr(pr)} className="text-red-500 hover:text-red-700 font-bold p-1 ml-2 flex-shrink-0">
                     &times;
                   </button>
                 </li>

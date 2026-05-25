@@ -10,8 +10,14 @@ pub enum AppError {
     #[error(transparent)]
     Storage(#[from] StorageError),
 
+    #[error(transparent)]
+    Credential(#[from] CredentialError),
+
     #[error("There is no token, can't check pr details")]
     MissingToken,
+
+    #[error("Refresh time must be at least 1 minute")]
+    InvalidRefreshTime,
 
     #[error("Failed to parse PR")]
     InvalidPullRequestUrl,
@@ -57,4 +63,13 @@ pub enum StorageError {
 
     #[error(transparent)]
     InvalidPullRequestState(#[from] PullRequestStateParseError),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum CredentialError {
+    #[error("credential store error: {0}")]
+    Keyring(#[from] keyring::Error),
+
+    #[error("credential worker failed: {0}")]
+    Join(#[from] tokio::task::JoinError),
 }

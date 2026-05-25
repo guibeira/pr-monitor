@@ -54,14 +54,19 @@ pub async fn get_all_prs(state: State<'_, AppState>) -> Result<Vec<PullRequestMo
 
 #[tauri::command]
 pub async fn has_token(state: State<'_, AppState>) -> Result<bool, String> {
-    state.storage.has_token().await.map_err(into_command_error)
+    state
+        .credentials
+        .get_github_token()
+        .await
+        .map(|token| token.is_some())
+        .map_err(into_command_error)
 }
 
 #[tauri::command]
 pub async fn add_token(state: State<'_, AppState>, token: String) -> Result<(), String> {
     state
-        .storage
-        .set_token(token)
+        .credentials
+        .set_github_token(token)
         .await
         .map_err(into_command_error)
 }
@@ -90,8 +95,8 @@ async fn add_item_inner(state: &AppState, url: &str) -> AppResult<Vec<PullReques
     );
 
     let token = state
-        .storage
-        .get_token()
+        .credentials
+        .get_github_token()
         .await?
         .ok_or(AppError::MissingToken)?;
     let pull_request = get_pr_details(&token, &key).await?;
@@ -115,6 +120,10 @@ pub async fn set_refresh_time(
     state: State<'_, AppState>,
     time_in_minutes: u64,
 ) -> Result<(), String> {
+    if time_in_minutes == 0 {
+        return Err(into_command_error(AppError::InvalidRefreshTime));
+    }
+
     let time_in_seconds = time_in_minutes * 60;
     state
         .storage
@@ -174,7 +183,7 @@ pub async fn set_theme(state: State<'_, AppState>, theme: String) -> Result<(), 
 }
 
 async fn start_monitor(app_handle: tauri::AppHandle<Wry>, state: &AppState) -> AppResult<()> {
-    let Some(token) = state.storage.get_token().await? else {
+    let Some(token) = state.credentials.get_github_token().await? else {
         info!("Token not found");
         return Ok(());
     };

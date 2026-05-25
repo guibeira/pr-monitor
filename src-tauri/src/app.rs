@@ -1,3 +1,4 @@
+use crate::credentials::CredentialStore;
 use crate::error::{AppError, AppResult};
 use crate::monitor::Monitor;
 use crate::storage::Storage;
@@ -7,6 +8,7 @@ use tauri::{window::Color, Manager};
 use tauri_plugin_positioner::WindowExt;
 
 pub struct AppState {
+    pub credentials: CredentialStore,
     pub storage: Storage,
     pub monitor: Monitor,
 }
@@ -14,6 +16,7 @@ pub struct AppState {
 impl AppState {
     pub fn new(db_path: std::path::PathBuf) -> AppResult<Self> {
         Ok(Self {
+            credentials: CredentialStore::default(),
             storage: Storage::new(db_path)?,
             monitor: Monitor::default(),
         })

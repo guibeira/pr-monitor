@@ -7,7 +7,7 @@ use regex::Regex;
 use std::sync::LazyLock;
 
 static GITHUB_PR_URL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"github\.com/([^/]+)/([^/]+)/pull/(\d+)")
+    Regex::new(r"^https?://(?:www\.)?github\.com/([^/?#]+)/([^/?#]+)/pull/(\d+)/?(?:[?#].*)?$")
         .expect("static GitHub PR URL regex should be valid")
 });
 
@@ -127,8 +127,30 @@ mod tests {
     }
 
     #[test]
+    fn parse_github_pr_url_allows_http_www_query_and_fragment() {
+        let key = parse_github_pr_url("http://www.github.com/acme/widgets/pull/42?foo=bar#files")
+            .expect("url should parse");
+
+        assert_eq!(key, PullRequestKey::new("acme", "widgets", 42));
+    }
+
+    #[test]
     fn parse_github_pr_url_rejects_non_pull_request_urls() {
         let key = parse_github_pr_url("https://github.com/acme/widgets/issues/42");
+
+        assert_eq!(key, None);
+    }
+
+    #[test]
+    fn parse_github_pr_url_rejects_urls_embedded_in_other_text() {
+        let key = parse_github_pr_url("see https://github.com/acme/widgets/pull/42");
+
+        assert_eq!(key, None);
+    }
+
+    #[test]
+    fn parse_github_pr_url_rejects_non_github_hosts() {
+        let key = parse_github_pr_url("https://example.com/github.com/acme/widgets/pull/42");
 
         assert_eq!(key, None);
     }

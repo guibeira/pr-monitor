@@ -1,5 +1,6 @@
 pub mod app;
 mod commands;
+mod credentials;
 pub mod domain;
 pub mod error;
 pub mod github;
