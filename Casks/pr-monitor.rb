@@ -1,9 +1,9 @@
 cask "pr-monitor" do
   arch arm: "aarch64-apple-darwin", intel: "x86_64-apple-darwin"
 
-  version "0.1.3"
-  sha256 arm:   "bac7db0809504633fd3c466c6b9014e069525c86450761e35f52f588013d2944",
-         intel: "e173b0ff0352acf06dad4b61fd62b857edb399cbf7f30010053d281939650b9b"
+  version "0.1.4"
+  sha256 arm:   "0cffaaad3ab4d46821d8a71b7af8e98c64cf2ed9004fabf1420455d4804093fb",
+         intel: "358a309bcdd21d279a8be004f43866cfb97145c79bdeec147b303c8de82e652d"
 
   url "https://github.com/guibeira/pr-monitor/releases/download/v#{version}/pr-monitor-#{version}-#{arch}.dmg",
       verified: "github.com/guibeira/pr-monitor/"
