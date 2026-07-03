@@ -1,11 +1,14 @@
 use crate::credentials::CredentialStore;
+use crate::diagnostics;
 use crate::error::{AppError, AppResult};
 use crate::monitor::Monitor;
 use crate::storage::Storage;
+use log::LevelFilter;
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::plugin::TauriPlugin;
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{window::Color, Manager};
-use tauri_plugin_positioner::WindowExt;
+use tauri::{window::Color, Manager, PhysicalPosition, PhysicalSize, Rect, Runtime, WebviewWindow};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind, TimezoneStrategy};
 
 pub struct AppState {
     pub credentials: CredentialStore,
@@ -25,7 +28,10 @@ impl AppState {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    diagnostics::install_panic_hook();
+
+    let run_result = tauri::Builder::default()
+        .plugin(log_plugin())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Focused(false) = event {
                 let _ = window.hide();
@@ -46,6 +52,8 @@ pub fn run() {
             std::fs::create_dir_all(&app_data_dir)?;
             let db_path = app_data_dir.join("monitor.db");
             app.manage(AppState::new(db_path)?);
+            log::info!("App initialized");
+            log::info!("Log directory: {}", diagnostics::app_log_dir().display());
 
             let quit = MenuItemBuilder::new("Quit").id("quit").build(app)?;
             let menu = MenuBuilder::new(app).items(&[&quit]).build()?;
@@ -64,14 +72,16 @@ pub fn run() {
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
+                        rect,
                         ..
                     } = event
                     {
                         if let Some(window) = app.get_webview_window("main") {
                             if !window.is_visible().unwrap_or(false) {
-                                let _ = window.move_window(
-                                    tauri_plugin_positioner::Position::TrayBottomCenter,
-                                );
+                                if let Err(err) = move_window_to_tray_bottom_center(&window, &rect)
+                                {
+                                    log::warn!("Failed to position tray window: {err}");
+                                }
                                 let _ = window.show();
                                 let _ = window.set_focus();
                             } else {
@@ -89,7 +99,6 @@ pub fn run() {
 
             Ok(())
         })
-        .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             crate::commands::add_item,
@@ -108,6 +117,39 @@ pub fn run() {
             crate::commands::get_theme,
             crate::commands::set_theme
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .run(tauri::generate_context!());
+
+    if let Err(err) = run_result {
+        log::error!("error while running tauri application: {err}");
+        diagnostics::record_fatal_error("error while running tauri application", &err);
+        eprintln!("error while running tauri application: {err}");
+        std::process::exit(1);
+    }
+}
+
+fn log_plugin<R: Runtime>() -> TauriPlugin<R> {
+    tauri_plugin_log::Builder::new()
+        .targets([
+            Target::new(TargetKind::Stdout),
+            Target::new(TargetKind::LogDir { file_name: None }),
+        ])
+        .rotation_strategy(RotationStrategy::KeepAll)
+        .timezone_strategy(TimezoneStrategy::UseLocal)
+        .max_file_size(1_000_000)
+        .level(LevelFilter::Info)
+        .build()
+}
+
+fn move_window_to_tray_bottom_center<R: Runtime>(
+    window: &WebviewWindow<R>,
+    rect: &Rect,
+) -> tauri::Result<()> {
+    let tray_position: PhysicalPosition<f64> = rect.position.to_physical(1.0);
+    let tray_size: PhysicalSize<f64> = rect.size.to_physical(1.0);
+    let window_size = window.outer_size()?;
+
+    let x = tray_position.x + (tray_size.width / 2.0) - (window_size.width as f64 / 2.0);
+    let y = tray_position.y;
+
+    window.set_position(PhysicalPosition::new(x.round() as i32, y.round() as i32))
 }
